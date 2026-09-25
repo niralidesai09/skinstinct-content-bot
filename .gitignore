@@ -1,0 +1,6 @@
+.env
+.venv/
+content.db
+bot.log
+__pycache__/
+.DS_Store

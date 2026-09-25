@@ -1,0 +1,70 @@
+PUBLISHED LINKEDIN POSTS BY MEERA PILLAI
+(Voice reference only. Match the style; never reuse sentences or facts from these as if new.)
+
+=== linkedin_post_001 (Category: Ingredient Deep-Dive) ===
+
+The niacinamide serum you're using probably has the ingredient listed at 5% or 10% on the label. That number is almost certainly meaningless without knowing three other things about the formulation. I want to explain why, because I've seen this misunderstood enough times - by customers, by other brands, and by us in our early formulations - that it's worth going through properly.
+
+Niacinamide is water-soluble and relatively stable, which is why formulators like it. It doesn't oxidise the way Vitamin C does, it doesn't degrade under light exposure the way retinol does. But it has one significant formulation sensitivity that almost nobody talks about on product labels: it converts to niacin at low pH. Niacin is not inert. It causes vasodilation. In skin terms, that's the flushing reaction some people report after using niacinamide products. The conversion happens more aggressively below pH 4, but it starts earlier. If a niacinamide serum is formulated at pH 3.5 to maximise AHA or BHA activity in the same product, you're not getting the niacinamide benefits you paid for. You're getting a diluted version at best, and a flushing risk at worst.
+
+Most serums don't list their pH on the label. This is legal. It is also not helpful.
+
+The second thing the percentage doesn't tell you is the delivery context. Niacinamide at 5% in a water-heavy base with no penetration support behaves differently from 5% in a formulation designed for skin retention. I'm not talking about anything exotic - base ingredient selection, how the formula is structured, the order in which ingredients are combined during manufacture - these all affect how much of the listed concentration is actually available at the skin barrier. We spent several months adjusting the base of our serum before the CoA results matched what we were seeing in application consistency tests. The label percentage stayed the same the entire time.
+
+The third thing is batch consistency. A small number of formulations in a batch manufactured at lower temperatures will have different ingredient dispersion than those processed at the optimal temperature. If the supplier's batch testing protocol is sampling at the start and end of a run rather than at multiple points through it, variance exists that the label never captures.
+
+I am not making a case that niacinamide doesn't work. The evidence for its role in sebum regulation, skin barrier support, and hyperpigmentation is solid and replicable across well-controlled studies. What I'm saying is that the percentage on the label is the beginning of the question, not the answer. The pH of the formula, the delivery base, and the batch manufacturing process together determine whether you're actually using what the label claims.
+
+When we were building our serum formulation, our brief to the contract manufacturer required pH documentation, stability testing at three-month intervals for the first year, and mid-batch CoA sampling. These are not unusual requirements. They are also not standard practice for most brands, because they add cost and complexity and most customers don't ask for them.
+
+You should ask for them. Not from us specifically - from any brand whose products you're spending significant money on. If the answer is that they don't have that documentation, that's useful information.
+
+=== linkedin_post_002 (Category: Founder Story) ===
+
+In 2021 I was sitting in a stability review meeting at the pharma company I worked for. We were reviewing a skincare formulation - not a drug, but a cosmeceutical that was going through our standard documentation process before market release. The active ingredient was listed at 8% concentration with a 24-month stability claim on the product file.
+
+I asked about the pH of the finished formula. The answer was 3.2.
+
+The active we were discussing has known degradation behaviour at pH below 3.8. At pH 3.2, you would expect significant concentration loss within the first 8 to 10 months under standard storage conditions. The 24-month stability claim was based on accelerated testing that did not account for this specific interaction - the testing protocol had been inherited from a previous product with a different base.
+
+Nobody else in the room asked about it. The formulation passed review. I left the company 7 months later.
+
+I want to be precise about what I'm not saying here. I'm not saying the people in that room were incompetent or malicious. I'm saying the system had a gap, the gap was not unusual, and the product would have reached customers with a shelf life claim that was not supportable by the formulation chemistry. This happens across the industry at various scales. Some of it is carelessness. Some of it is commercial pressure. Most of it is that the gap between formulation science and marketing communication is wide enough that claims get made without ever being checked against the data behind them.
+
+Skinstinct came out of the specific discomfort of sitting in that room and understanding exactly what was in front of me. I am not trying to build a brand story around a single meeting. I'm saying that moment was the first time I thought: what would it look like to do this with the documentation actually in order from the beginning?
+
+Three years later I can say it looks like more CoA requests than our contract manufacturer initially expected, more questions about pH testing intervals than most clients ask, and a stability testing protocol that adds to our timelines and costs more than the industry standard approach. It also looks like being able to answer when a customer asks what the pH of our serum is, because we have the data and we're not embarrassed by it.
+
+That is the entirety of the founding rationale. It is not a particularly inspiring story. It is a documentation gap and a decision to do something about it.
+
+=== linkedin_post_003 (Category: India-Specific Context) ===
+
+In the 12 months to June 2025, 23% of our product returns came from customers who mentioned the texture or feel of the product as the reason. When I mapped those returns against the customer's location, the pattern was immediate: 71% were from customers in cities with average annual humidity above 70%. Mumbai, Chennai, Kochi, Kolkata.
+
+We were using a formulation originally developed for a climate it was not designed for.
+
+Most skincare formulations in the Indian market are either imported directly or developed using ingredient systems and efficacy benchmarks from European and Korean markets. This is not inherently a problem - the actives science translates. But the vehicle, the base that carries the actives, is calibrated for a different climate. A moisturiser formulated for Oslo in February has different occlusive requirements than one for Chennai in August. The emollient-to-humectant ratio, the occlusive percentage, the overall texture that comes out of the formulation - these are downstream of climate assumptions that were made by the formulator for their market, not ours.
+
+The specific issue in our case was that our first serum base was too film-forming for high-humidity skin conditions. In a dry climate, that film helps retain moisture. In Mumbai in July, the same film traps sweat under the product, changes the skin feel within 20 minutes of application, and produces exactly the greasy, heavy sensation our customers were describing. The actives were intact. The formulation was working as designed. It was designed for the wrong context.
+
+We reformulated using a lighter base system with adjusted humectant-to-occlusive balance. Returns from humid cities dropped to 8% in the following quarter. The active ingredient concentrations stayed identical.
+
+I bring this up not because our reformulation is a selling point - it should have been right the first time. I bring it up because the climate assumption problem is almost never discussed openly in Indian skincare. Brands import formulations or use contract manufacturers running formulations designed elsewhere, and the adaptation step gets skipped because it's expensive and because customers often can't articulate what's wrong beyond "it doesn't feel right." The texture data usually exists somewhere - in returns, in reviews, in customer service logs. The connection to climate and base formulation chemistry is rarely made.
+
+Our customer return data is not proprietary. We track it because it's useful, and the pattern it revealed was one we should have anticipated from the start. If you're building a skincare brand for the Indian market, the first question to ask your contract manufacturer is what climate the base formulation was validated for. If the answer is anything other than "we'll run stability testing under Indian temperature and humidity conditions," that's worth investigating further.
+
+=== linkedin_post_004 (Category: Industry Transparency) ===
+
+Last September I was at a trade fair in Mumbai. One of the booths had a banner that said: CLINICALLY TESTED. DERMATOLOGIST APPROVED. The product was a moisturiser.
+
+I asked the brand representative what the clinical testing involved. She said she'd find out and get back to me. She didn't, which is a reasonable outcome because the answer is usually not something the sales team is briefed on.
+
+"Clinically tested" is not a regulated claim in India under current cosmetic labelling guidelines. It means whatever the brand chooses it to mean. In practice, I've seen it applied to: a 4-week consumer perception study (participants rating their own skin feel), an in-vitro ingredient efficacy test run by the ingredient supplier rather than the brand, a safety patch test conducted on 25 people to confirm no irritation response, and one case where I could not find any documentation at all for what the testing referred to.
+
+None of these are clinical trials in any meaningful sense of the term. None of them would pass review in a pharmaceutical efficacy claim context. All of them are technically defensible under current cosmetic regulations because the regulations don't require the claim to be substantiated in any specific way.
+
+I want to be careful here because I'm not saying all efficacy claims in the skincare industry are fabricated. Some brands do robust independent testing. Some ingredient suppliers publish genuinely useful data. The problem is that "clinically tested" as a label claim tells the customer nothing about which category they're looking at. The words are the same whether the testing was a 500-person double-blind study or 12 people rating how their skin felt after two weeks. There is no way to know from the label.
+
+What you can do is ask. Not at a trade fair booth, but in writing, to the brand's customer service. Ask what the clinical testing referred to on the label involved: how many participants, what the study design was, who conducted it, and whether the results are available. If the brand has real data, they will usually share it without much resistance, because real data is a commercial asset and brands are proud of it. If the answer is vague or doesn't arrive, that is also useful information.
+
+We list exactly what our product testing covers on our website. Sample size, study type, who ran it. It is not the most flattering version of the information because some of our testing is early stage. I'd rather publish that honestly than use language that implies more than we've done.
