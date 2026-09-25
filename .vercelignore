@@ -1,0 +1,4 @@
+.venv/
+content.db
+bot.log
+.env

@@ -14,23 +14,47 @@ Meera keeps dropping notes into her Telegram channel. The bot turns the best one
 | **Processing** | 1. **Score** (Gemini Flash): 0-10 with a one-line reason. **Below 6:** the bot explains why and stops, with no draft. 2. **Keywords** (Gemini Flash): a short search phrase. 3. **News:** top Google News result (free RSS, no key), giving headline, source, date and link |
 | **AI** | **Draft** (Gemini Pro): a 450-600 word post in her voice. The news is used only if it fits naturally. Any number only Meera has becomes a `[MEERA: …]` placeholder |
 | **Output** | The draft comes back in the same chat. If it uses the news, it ends with a NEWS SOURCE / FROM / LINK / ⚠ verify block. Meera replies **APPROVE** or **REJECT**, or taps Approve / Redo / Reject |
-| **Memory** | Notes and drafts are saved in SQLite with a status (pending → approved / rejected). Rejected notes and drafts are kept, not deleted |
+| **Memory** | Notes, drafts and the Voice Skill are saved in Supabase, with draft status pending → approved / rejected. Rejected notes and drafts are kept, not deleted |
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `bot.py` | The bot: Telegram polling, scheduler, triage, drafting, review buttons, backlog import |
-| `meera_voice_guide.txt` | Meera's voice and writing-style guide, built from her 4 LinkedIn posts and 11 newsletters |
+| `core.py` | The pipeline: scoring, Google News, drafting, Telegram replies, APPROVE / REJECT, storage (Supabase or SQLite) |
+| `api/webhook.py` | Vercel function. Telegram sends every message here |
+| `api/cron.py` | Vercel cron. Drafts from the best waiting note on Mon/Wed/Fri at 08:00 IST |
+| `supabase/schema.sql` | Creates the `notes`, `drafts` and `voice_skill` tables (plus two small helper tables) |
+| `bot.py` | Local runner and admin commands (`seed-voice`, `set-webhook`, `import`, `draft`) |
+| `meera_voice_guide.txt` | The Voice Skill, built from her 4 LinkedIn posts and 11 newsletters. Seeded into `voice_skill` |
 | `published_linkedin.txt` | Her 4 published LinkedIn posts, used as style examples |
-| `.env.example` | Settings template. Copy it to `.env` and fill it in |
-| `requirements.txt` | Python dependencies |
+| `vercel.json` | Function timeout (300 s) and the cron schedule |
 
-## Setup
+## Deploy (Vercel + Supabase)
 
-1. Create a bot with [@BotFather](https://t.me/BotFather) and make it an **admin** of the notes channel.
-2. Copy `.env.example` to `.env` and fill in `TELEGRAM_BOT_TOKEN`, `NOTES_CHANNEL_ID` and `GEMINI_API_KEY` (get a key from [Google AI Studio](https://aistudio.google.com/apikey)).
-3. Install and run:
+1. **Supabase:** SQL Editor → New query → paste `supabase/schema.sql` → Run.
+2. **Vercel:** Add New → Project → import this repo. Under Environment Variables, add:
+   - `TELEGRAM_BOT_TOKEN`
+   - `GEMINI_API_KEY`
+   - `NOTES_CHANNEL_ID`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `WEBHOOK_SECRET`
+   - `CRON_SECRET`
+
+   Then click Deploy.
+3. **Seed the Voice Skill and connect Telegram** (from a machine with the same values in `.env`):
+
+```bash
+python bot.py seed-voice
+```
+
+```bash
+python bot.py set-webhook https://YOUR-PROJECT.vercel.app/api/webhook
+```
+
+This registers the webhook with Telegram, including the secret token, so only Telegram can call it.
+
+## Run locally instead
 
 ```bash
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
@@ -40,9 +64,7 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python bot.py
 ```
 
-4. Open the bot in Telegram and tap **Start**. The first person to message it privately becomes the reviewer, and drafts go to that chat from then on.
-
-The bot has to keep running for the schedule to fire, so run it on an always-on machine (a small VPS, or a Railway/Render worker).
+Without `SUPABASE_URL`, it stores everything in a local SQLite file. Local polling only works while no webhook is set; `python bot.py delete-webhook` switches back.
 
 ## Using it
 
@@ -78,4 +100,3 @@ Each note is triaged as it's imported, and a summary of develop / hold / discard
 ## Limitations
 
 - Voice notes aren't transcribed. Only text messages and photo captions are read.
-- The schedule only fires while the bot is running.
