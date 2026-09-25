@@ -1,6 +1,6 @@
 """Local runner and admin commands for the Skinstinct content bot.
 
-The pipeline itself lives in core.py. In production it runs on Vercel (api/webhook.py); this file is for running
+The pipeline itself lives in core.py. In production it runs on Vercel (app.py); this file is for running
 it on your own machine with long polling, and for one-off admin tasks.
 
 Usage:

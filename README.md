@@ -21,13 +21,12 @@ Meera keeps dropping notes into her Telegram channel. The bot turns the best one
 | File | What it is |
 |---|---|
 | `core.py` | The pipeline: scoring, Google News, drafting, Telegram replies, APPROVE / REJECT, storage (Supabase or SQLite) |
-| `api/webhook.py` | Vercel function. Telegram sends every message here |
-| `api/cron.py` | Vercel cron. Drafts from the best waiting note on Mon/Wed/Fri at 08:00 IST |
+| `app.py` | Vercel entrypoint. `POST /api/webhook` receives every Telegram message; `GET /api/cron` runs the Mon/Wed/Fri 08:00 IST draft |
 | `supabase/schema.sql` | Creates the `notes`, `drafts` and `voice_skill` tables (plus two small helper tables) |
 | `bot.py` | Local runner and admin commands (`seed-voice`, `set-webhook`, `import`, `draft`) |
 | `meera_voice_guide.txt` | The Voice Skill, built from her 4 LinkedIn posts and 11 newsletters. Seeded into `voice_skill` |
 | `published_linkedin.txt` | Her 4 published LinkedIn posts, used as style examples |
-| `vercel.json` | Function timeout (300 s) and the cron schedule |
+| `vercel.json`, `pyproject.toml` | Cron schedule, and the Python entrypoint and dependencies for Vercel |
 
 ## Deploy (Vercel + Supabase)
 
