@@ -65,8 +65,12 @@ def now_iso():
 # Storage: SQLite locally, Supabase when SUPABASE_URL is set
 # --------------------------------------------------------------------------
 
+# On Vercel only /tmp is writable, and it is wiped when the function instance recycles.
+SQLITE_PATH = Path("/tmp/content.db") if os.environ.get("VERCEL") else HERE / "content.db"
+
+
 class SqliteStore:
-    def __init__(self, path=HERE / "content.db"):
+    def __init__(self, path=SQLITE_PATH):
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript("""

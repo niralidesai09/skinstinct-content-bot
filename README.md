@@ -31,13 +31,13 @@ Meera keeps dropping notes into her Telegram channel. The bot turns the best one
 
 ## Deploy (Vercel + Supabase)
 
-1. **Supabase:** SQL Editor → New query → paste `supabase/schema.sql` → Run.
+1. **Supabase (recommended):** SQL Editor → New query → paste `supabase/schema.sql` → Run. Without Supabase the bot still works on Vercel, but its database lives in `/tmp` and is wiped whenever Vercel recycles the function, so notes, drafts and APPROVE/REJECT history don't persist.
 2. **Vercel:** Add New → Project → import this repo. Under Environment Variables, add:
    - `TELEGRAM_BOT_TOKEN`
    - `GEMINI_API_KEY`
    - `NOTES_CHANNEL_ID`
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `REVIEW_CHAT_ID`
+   - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (optional)
    - `WEBHOOK_SECRET`
    - `CRON_SECRET`
 
