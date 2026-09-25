@@ -83,7 +83,8 @@ def db():
             category TEXT,
             angle TEXT,
             reason TEXT,
-            status TEXT NOT NULL DEFAULT 'new' -- new / triaged / drafted / approved / skipped
+            status TEXT NOT NULL DEFAULT 'new', -- new / triaged / drafted / approved / skipped
+            news TEXT                          -- suggested news angle, found at triage time
         );
         CREATE UNIQUE INDEX IF NOT EXISTS notes_tg ON notes(tg_message_id) WHERE tg_message_id IS NOT NULL;
         CREATE TABLE IF NOT EXISTS drafts (
@@ -97,6 +98,8 @@ def db():
         );
         CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
     """)
+    if "news" not in [r["name"] for r in conn.execute("PRAGMA table_info(notes)")]:
+        conn.execute("ALTER TABLE notes ADD COLUMN news TEXT")
     return conn
 
 
@@ -165,7 +168,7 @@ def draft_buttons(draft_id):
     return [[
         {"text": "Approve", "callback_data": f"approve:{draft_id}"},
         {"text": "Redo", "callback_data": f"redo:{draft_id}"},
-        {"text": "Skip note", "callback_data": f"skip:{draft_id}"},
+        {"text": "Reject", "callback_data": f"reject:{draft_id}"},
     ]]
 
 
@@ -202,26 +205,28 @@ def _text(resp):
 TRIAGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "score": {"type": "integer", "description": "1-10: how strong a LinkedIn post this note could become"},
-        "verdict": {"type": "string", "enum": ["develop", "hold", "discard"]},
+        "score": {"type": "integer", "description": "0-10: how strong a LinkedIn post this note could become"},
         "category": {"type": "string", "enum": CATEGORIES},
         "angle": {"type": "string", "description": "One sentence: the post's core claim, in Meera's framing"},
         "reason": {"type": "string", "description": "One short sentence explaining the score"},
     },
-    "required": ["score", "verdict", "category", "angle", "reason"],
+    "required": ["score", "category", "angle", "reason"],
     "additionalProperties": False,
 }
 
-TRIAGE_SYSTEM = f"""You triage raw notes for Meera Pillai, founder of Skinstinct (Indian D2C skincare, ex-pharma formulation).
-Her LinkedIn audience: 28-40 year old urban Indian women tired of being sold to, who respond to founders who know their science.
-Her best post (niacinamide concentration vs label %) drove 340 profile visits and 3 wholesale enquiries.
+TRIAGE_SYSTEM = f"""You screen raw notes for Meera Pillai, founder of Skinstinct (Indian D2C skincare, ex-pharma formulation),
+before anything is drafted. Her LinkedIn audience: 28-40 year old urban Indian women tired of being sold to, who respond
+to founders who know their science. Her best post (niacinamide concentration vs label %) drove 340 profile visits and
+3 wholesale enquiries.
 
-Score how strong a LinkedIn post this note could become, in HER voice:
-- 8-10 develop: a specific, first-hand observation (manufacturing, CoA, customer data, returns, a supplier conversation)
-  that exposes a gap between a label/marketing claim and formulation reality, or India-specific context. Enough substance for 450-600 words.
-- 5-7 hold: real idea but thin, generic, or needs facts she hasn't given yet.
-- 1-4 discard: to-do items, personal notes, pure opinion with nothing to teach, hype, anything that would need her to
-  claim medical/dermatologist authority, or anything that attacks a named person or competitor.
+Score 0-10 how strong a LinkedIn post this note could become, in HER voice. Notes scoring 6+ get drafted; below 6 do not.
+- 8-10: a specific, first-hand observation (manufacturing, CoA, batch data, customer case, supplier conversation) that
+  exposes a gap between a claim and formulation reality, with enough substance for 450-600 words.
+- 6-7: a real, teachable point in her territory, but thinner or less first-hand.
+- 4-5: an idea with no specific anchor yet, or something she says she has already covered with no new angle.
+- 0-3: logistics, to-dos, reminders, abandoned half-sentences, personal notes, hype, anything that needs medical or
+  dermatologist authority, or attacks on a named person or competitor.
+Be strict. If every note passes, the screen is useless.
 
 Categories: {", ".join(CATEGORIES)}.
 
@@ -238,6 +243,58 @@ def triage(note_text):
     return json.loads(_text(resp))
 
 
+KEYWORDS_SCHEMA = {
+    "type": "object",
+    "properties": {"query": {"type": "string", "description": "A 3-5 word news search phrase"}},
+    "required": ["query"],
+    "additionalProperties": False,
+}
+
+
+def news_query(note_text):
+    resp = _generate(
+        TRIAGE_MODEL,
+        "Extract 3-5 search terms from this skincare founder's note and return one short news search phrase "
+        "(3-5 words) likely to find a recent, relevant industry or regulatory news story. No brand names.",
+        note_text,
+        response_mime_type="application/json",
+        response_json_schema=KEYWORDS_SCHEMA,
+    )
+    return json.loads(_text(resp))["query"]
+
+
+def google_news(query):
+    """Top Google News result for the query (free RSS, no key). Returns a dict or None."""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+    for q in (f"{query} when:90d", query, " ".join(query.split()[:2])):
+        r = http.get("https://news.google.com/rss/search",
+                     params={"q": q, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"}, timeout=20)
+        item = ET.fromstring(r.content).find("./channel/item")
+        if item is None:
+            continue
+        source = item.findtext("source") or ""
+        headline = item.findtext("title") or ""
+        if source and headline.endswith(f" - {source}"):
+            headline = headline[: -len(source) - 3]
+        try:
+            date = parsedate_to_datetime(item.findtext("pubDate")).strftime("%d %b %Y")
+        except (TypeError, ValueError):
+            date = item.findtext("pubDate") or ""
+        return {"headline": headline, "source": source, "date": date, "link": item.findtext("link") or "", "query": q}
+    return None
+
+
+def find_news(note_text):
+    return google_news(news_query(note_text))
+
+
+def verify_block(news):
+    line = "─" * 33
+    return (f"{line}\nNEWS SOURCE: {news['headline']}\nFROM: {news['source']} · {news['date']}\nLINK: {news['link']}\n"
+            f"⚠ Check this before publishing — you are the author of this claim\n{line}")
+
+
 DRAFT_SYSTEM = f"""You draft LinkedIn posts for Meera Pillai, founder of Skinstinct. The draft goes to Meera for review;
 she edits and publishes it herself. Your job is a draft she can publish with light edits, not one she has to rewrite.
 
@@ -251,18 +308,15 @@ Here are her four published LinkedIn posts. Match their structure, rhythm and re
 
 Hard rules:
 - The post must be built on Meera's note. Her observation is the spine; do not replace it with a generic explainer.
-- Facts: only use (a) what is in her note, (b) well-established formulation science, or (c) what you found with Google Search
-  and can name a source for. Never invent Skinstinct data (percentages, return rates, batch results, customer counts, timelines).
+- Facts: only use (a) what is in her note, (b) well-established formulation science, or (c) the news item provided.
+  Never invent Skinstinct data (percentages, return rates, batch results, customer counts, timelines).
   If the post needs a number only Meera has, write [MEERA: <what's needed>] inline instead.
 - Never state facts about Skinstinct (products it sells or is developing, timelines, costs, processes, results) unless
   they are in her note or her published posts. If a Skinstinct beat would help, use a [MEERA: ...] placeholder.
+- News item: if it is genuinely relevant, use it to make the post timely. If it doesn't fit naturally, ignore it.
+  Only claim what the headline itself says; do not add details you cannot see.
 - Use her moves, not her sentences. Do not copy lines from the voice guide or published posts verbatim
   (e.g. "almost certainly meaningless", "I want to be precise about what I'm not saying", "the base isn't decoration").
-  Write fresh sentences that do the same job.
-- News angle: use Google Search to find ONE current item (ideally from the last 60 days) - a regulatory update (CDSCO, BIS,
-  ASCI, EU SCCS), a study, an industry data point, or a news story - that genuinely connects to the note. Weave it in
-  naturally, in her voice, usually in the first two paragraphs. Prefer Indian or regulatory sources. If nothing relevant and
-  recent exists, say so rather than forcing a weak link.
 - 450-600 words. Prose paragraphs. No headers, bullets, hashtags, emojis, exclamation marks, or sign-off.
   British spelling. Spaced hyphen " - " for dashes.
 - Do not name or attack competitor brands or individuals.
@@ -272,34 +326,30 @@ Reply in exactly this format and nothing else:
 DRAFT:
 <the post>
 
-NEWS ANGLE:
-<one line: what you used, publication and date, URL>
+USED NEWS:
+<yes or no>
 
 CHECK BEFORE POSTING:
-<1-4 short lines: any [MEERA: ...] placeholders, any claim she should verify (always include the news item), anything you were unsure about>"""
+<1-3 short lines: any [MEERA: ...] placeholders, any claim she should verify, anything you were unsure about>"""
 
 
-def write_draft(note, redo_of=None):
+def write_draft(note, news, redo_of=None):
     ask = (
-        f"Meera's note (category guess: {note['category']}; core angle: {note['angle']}):\n\n"
-        f"{note['text']}\n\n"
-        f"Today is {dt.date.today():%d %B %Y}."
+        f"Meera's note (category: {note['category']}; core angle: {note['angle']}):\n\n"
+        f"{note['text']}\n\nToday is {dt.date.today():%d %B %Y}.\n\n"
     )
+    if news:
+        ask += f"News item:\nHeadline: {news['headline']}\nSource: {news['source']}, {news['date']}"
+    else:
+        ask += "No news item was found. Write the post without one."
     if redo_of:
-        ask += (
-            "\n\nMeera asked for a different take than this earlier draft. Use a different opening and structure, and a "
-            f"different news angle if a better one exists:\n\n{redo_of}"
-        )
-    resp = _generate(DRAFT_MODEL, DRAFT_SYSTEM, ask, tools=[types.Tool(google_search=types.GoogleSearch())])
-    draft = parse_draft(_text(resp))
-    gm = resp.candidates[0].grounding_metadata
-    chunks = (gm.grounding_chunks if gm else None) or []
-    draft["SOURCES"] = "\n".join(f"- {c.web.title}: {c.web.uri}" for c in chunks[:5] if c.web)
-    return draft
+        ask += ("\n\nMeera asked for a different take than this earlier draft. Use a different opening and "
+                f"structure:\n\n{redo_of}")
+    return parse_draft(_text(_generate(DRAFT_MODEL, DRAFT_SYSTEM, ask)))
 
 
 def parse_draft(raw):
-    parts = {"DRAFT": "", "NEWS ANGLE": "", "CHECK BEFORE POSTING": ""}
+    parts = {"DRAFT": "", "USED NEWS": "", "CHECK BEFORE POSTING": ""}
     key = None
     for line in raw.splitlines():
         head = line.strip().rstrip(":").upper()
@@ -329,9 +379,11 @@ def save_note(conn, text, source, tg_message_id=None):
 def triage_note(conn, note_id):
     note = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
     t = triage(note["text"])
+    passed = t["score"] >= MIN_SCORE
     conn.execute(
-        "UPDATE notes SET score=?, verdict=?, category=?, angle=?, reason=?, status='triaged' WHERE id=?",
-        (t["score"], t["verdict"], t["category"], t["angle"], t["reason"], note_id),
+        "UPDATE notes SET score=?, verdict=?, category=?, angle=?, reason=?, status=? WHERE id=?",
+        (t["score"], "pass" if passed else "reject", t["category"], t["angle"], t["reason"],
+         "triaged" if passed else "rejected", note_id),
     )
     conn.commit()
     return t
@@ -339,36 +391,42 @@ def triage_note(conn, note_id):
 
 def best_note(conn):
     return conn.execute(
-        "SELECT * FROM notes WHERE status='triaged' AND verdict!='discard' AND score>=? "
-        "ORDER BY score DESC, created_at DESC LIMIT 1",
+        "SELECT * FROM notes WHERE status='triaged' AND score>=? ORDER BY score DESC, created_at DESC LIMIT 1",
         (MIN_SCORE,),
     ).fetchone()
 
 
-def make_and_send_draft(conn, note, redo_of=None):
-    send(REVIEW_CHAT_ID, f"Drafting from note #{note['id']} ({note['category']}, {note['score']}/10). Takes a minute or two.")
-    d = write_draft(note, redo_of=redo_of)
+def make_and_send_draft(conn, note, chat_id=None, redo_of=None, reply_to=None):
+    chat_id = chat_id or REVIEW_CHAT_ID
+    news = json.loads(note["news"]) if note["news"] else None
+    if note["news"] is None:
+        news = find_news(note["text"])
+        conn.execute("UPDATE notes SET news=? WHERE id=?", (json.dumps(news), note["id"]))
+        conn.commit()
+    d = write_draft(note, news, redo_of=redo_of)
+    used_news = bool(news) and d["USED NEWS"].lower().startswith("y")
+    body = d["DRAFT"] + (f"\n\n{verify_block(news)}" if used_news else "")
     cur = conn.execute(
         "INSERT INTO drafts(note_id, text, news_angle, checks, created_at) VALUES(?, ?, ?, ?, ?)",
-        (note["id"], d["DRAFT"], d["NEWS ANGLE"], d["CHECK BEFORE POSTING"], now_iso()),
+        (note["id"], d["DRAFT"], json.dumps(news) if used_news else None, d["CHECK BEFORE POSTING"], now_iso()),
     )
     conn.execute("UPDATE notes SET status='drafted' WHERE id=?", (note["id"],))
     conn.commit()
     draft_id = cur.lastrowid
-    words = len(d["DRAFT"].split())
-    header = f"DRAFT #{draft_id} - from note #{note['id']} - {words} words"
-    footer = f"NEWS ANGLE\n{d['NEWS ANGLE'] or '-'}\n\nCHECK BEFORE POSTING\n{d['CHECK BEFORE POSTING'] or '-'}"
-    if d["SOURCES"]:
-        footer += f"\n\nSEARCH SOURCES (open to verify)\n{d['SOURCES']}"
-    send(REVIEW_CHAT_ID, f"{header}\n\n{d['DRAFT']}")
-    send(REVIEW_CHAT_ID, footer, buttons=draft_buttons(draft_id))
+    header = f"DRAFT #{draft_id} - note #{note['id']} - {note['score']}/10 - {len(d['DRAFT'].split())} words"
+    if news and not used_news:
+        header += f"\n(News found but not a natural fit, so not used: {news['headline']} - {news['source']})"
+    footer = (f"CHECK BEFORE POSTING\n{d['CHECK BEFORE POSTING'] or '-'}\n\n"
+              f"Reply APPROVE or REJECT (or use the buttons). Status: pending.")
+    send(chat_id, f"{header}\n\n{body}", reply_to=reply_to)
+    send(chat_id, footer, buttons=draft_buttons(draft_id))
     return draft_id
 
 
 def scheduled_draft(conn):
     note = best_note(conn)
     if not note:
-        send(REVIEW_CHAT_ID, f"Scheduled draft: no note scored {MIN_SCORE}/10 or higher, so nothing was drafted. Send /queue to see what's waiting.")
+        send(REVIEW_CHAT_ID, f"Scheduled draft: no waiting note scored {MIN_SCORE}/10 or higher, so nothing was drafted.")
         return
     make_and_send_draft(conn, note)
 
@@ -390,12 +448,12 @@ def due_slot(now):
 
 HELP = (
     "How this works\n\n"
-    "Drop notes here as usual. I save each one and rate it.\n"
-    f"On {', '.join(d.title() for d in DRAFT_DAYS)} at {DRAFT_TIME} I draft a LinkedIn post from the best waiting note, "
-    "with one current news angle, and send it to you here to review. Nothing is published anywhere.\n\n"
-    "/draft - draft now from the best note\n"
-    "/draft 12 - draft from note #12\n"
-    "/queue - top waiting notes\n"
+    f"Send me a note. I score it 0-10. Below {MIN_SCORE}, I tell you why and stop. "
+    f"{MIN_SCORE} or above, I find a current news story on Google News and draft a LinkedIn post in your voice. "
+    "Nothing is published anywhere - you approve or reject every draft.\n\n"
+    "APPROVE / REJECT - update the latest pending draft (or APPROVE 3 for draft #3)\n"
+    "/draft 12 - draft note #12\n"
+    "/queue - scored notes waiting for a draft\n"
     "/help - this message"
 )
 
@@ -409,19 +467,15 @@ def handle_command(conn, text, chat_id):
             if not note:
                 send(chat_id, f"No note #{parts[1]}.")
                 return
-            if note["score"] is None:
-                triage_note(conn, note["id"])
-                note = conn.execute("SELECT * FROM notes WHERE id=?", (note["id"],)).fetchone()
         else:
             note = best_note(conn)
             if not note:
-                send(chat_id, f"No waiting note scored {MIN_SCORE}/10 or higher. Try /queue, or /draft <id>.")
+                send(chat_id, f"No waiting note scored {MIN_SCORE}/10 or higher.")
                 return
-        make_and_send_draft(conn, note)
+        send(chat_id, f"Drafting note #{note['id']}...")
+        make_and_send_draft(conn, note, chat_id)
     elif cmd == "/queue":
-        rows = conn.execute(
-            "SELECT * FROM notes WHERE status='triaged' AND verdict!='discard' ORDER BY score DESC, created_at DESC LIMIT 8"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM notes WHERE status='triaged' ORDER BY score DESC, created_at DESC LIMIT 8").fetchall()
         if not rows:
             send(chat_id, "Queue is empty.")
             return
@@ -431,22 +485,53 @@ def handle_command(conn, text, chat_id):
         send(chat_id, HELP)
 
 
+def set_draft_status(conn, draft, status, chat_id):
+    conn.execute("UPDATE drafts SET status=? WHERE id=?", (status, draft["id"]))
+    conn.execute("UPDATE notes SET status=? WHERE id=?", ("approved" if status == "approved" else "draft_rejected", draft["note_id"]))
+    conn.commit()
+    if status == "approved":
+        send(chat_id, f"Draft #{draft['id']} status: APPROVED. Copy it into LinkedIn when you're ready.")
+    else:
+        send(chat_id, f"Draft #{draft['id']} status: REJECTED. It's kept on record, not deleted.")
+
+
+def handle_decision(conn, text, chat_id):
+    """Typed APPROVE / REJECT, optionally with a draft number."""
+    parts = text.upper().replace("#", " ").split()
+    status = "approved" if parts[0] == "APPROVE" else "rejected"
+    if len(parts) > 1 and parts[1].isdigit():
+        draft = conn.execute("SELECT * FROM drafts WHERE id=? AND status='pending'", (int(parts[1]),)).fetchone()
+    else:
+        draft = conn.execute("SELECT * FROM drafts WHERE status='pending' ORDER BY id DESC LIMIT 1").fetchone()
+    if not draft:
+        send(chat_id, "No pending draft to update.")
+        return
+    set_draft_status(conn, draft, status, chat_id)
+
+
 def handle_note(conn, msg):
     text = (msg.get("text") or msg.get("caption") or "").strip()
+    chat_id = msg["chat"]["id"]
     if not text:
         return
     if text.startswith("/"):
-        handle_command(conn, text, msg["chat"]["id"])
+        handle_command(conn, text, chat_id)
+        return
+    if text.split()[0].upper().rstrip(".!") in ("APPROVE", "REJECT") and len(text.split()) <= 2:
+        handle_decision(conn, text, chat_id)
         return
     note_id = save_note(conn, text, "telegram", msg["message_id"])
     if not note_id:
         return
     t = triage_note(conn, note_id)
-    log.info("Note #%s triaged: %s/10 %s", note_id, t["score"], t["verdict"])
-    if TRIAGE_REPLIES:
-        verdict = {"develop": "worth developing", "hold": "holding - thin for now", "discard": "not a post"}[t["verdict"]]
-        send(msg["chat"]["id"], f"Note #{note_id} - {t['score']}/10 - {t['category']} - {verdict}\n{t['reason']}",
-             reply_to=msg["message_id"])
+    log.info("Note #%s scored %s/10", note_id, t["score"])
+    if t["score"] < MIN_SCORE:
+        send(chat_id, f"Note #{note_id}\nScore: {t['score']}/10 - NO DRAFT\nWhy: {t['reason']}", reply_to=msg["message_id"])
+        return
+    send(chat_id, f"Note #{note_id}\nScore: {t['score']}/10 - PASS\nWhy: {t['reason']}\n\n"
+                  "Finding a news angle and drafting. About a minute.", reply_to=msg["message_id"])
+    note = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+    make_and_send_draft(conn, note, chat_id, reply_to=msg["message_id"])
 
 
 def handle_callback(conn, cq):
@@ -456,22 +541,18 @@ def handle_callback(conn, cq):
     if not draft or draft["status"] != "pending":
         return
     msg = cq["message"]
-    tg("editMessageReplyMarkup", chat_id=msg["chat"]["id"], message_id=msg["message_id"], reply_markup={"inline_keyboard": []})
+    chat_id = msg["chat"]["id"]
+    tg("editMessageReplyMarkup", chat_id=chat_id, message_id=msg["message_id"], reply_markup={"inline_keyboard": []})
     if action == "approve":
-        conn.execute("UPDATE drafts SET status='approved' WHERE id=?", (draft["id"],))
-        conn.execute("UPDATE notes SET status='approved' WHERE id=?", (draft["note_id"],))
-        conn.commit()
-        send(msg["chat"]["id"], f"Draft #{draft['id']} approved. Copy it into LinkedIn when you're ready.")
+        set_draft_status(conn, draft, "approved", chat_id)
+    elif action == "reject":
+        set_draft_status(conn, draft, "rejected", chat_id)
     elif action == "redo":
         conn.execute("UPDATE drafts SET status='redone' WHERE id=?", (draft["id"],))
         conn.commit()
         note = conn.execute("SELECT * FROM notes WHERE id=?", (draft["note_id"],)).fetchone()
-        make_and_send_draft(conn, note, redo_of=draft["text"])
-    elif action == "skip":
-        conn.execute("UPDATE drafts SET status='skipped' WHERE id=?", (draft["id"],))
-        conn.execute("UPDATE notes SET status='skipped' WHERE id=?", (draft["note_id"],))
-        conn.commit()
-        send(msg["chat"]["id"], f"Note #{draft['note_id']} set aside. It won't be picked again.")
+        send(chat_id, f"Redrafting note #{note['id']}...")
+        make_and_send_draft(conn, note, chat_id, redo_of=draft["text"])
 
 
 def claim_review_chat(conn, chat_id):
@@ -480,8 +561,7 @@ def claim_review_chat(conn, chat_id):
     REVIEW_CHAT_ID = chat_id
     kv_set(conn, "review_chat", chat_id)
     log.info("Review chat set to %s", chat_id)
-    send(chat_id, "Connected. Drafts and their Approve / Redo / Skip buttons will come to this chat from now on. "
-                  "Keep dropping notes in the channel.\n\n" + HELP)
+    send(chat_id, "Connected. Send me a note here (or drop it in the channel) and I'll score it and draft a post.\n\n" + HELP)
 
 
 def handle_update(conn, upd):
@@ -493,12 +573,12 @@ def handle_update(conn, upd):
         elif msg["chat"].get("type") == "private" and not kv_get(conn, "review_chat") and not os.environ.get("REVIEW_CHAT_ID"):
             claim_review_chat(conn, chat_id)
         elif chat_id == REVIEW_CHAT_ID:
-            handle_command(conn, text if text.startswith("/") else "/help", chat_id)
+            handle_note(conn, msg)
         elif msg["chat"].get("type") == "private":
             send(chat_id, "This is a private bot.")
     elif "callback_query" in upd:
         cq = upd["callback_query"]
-        if cq.get("message", {}).get("chat", {}).get("id") == REVIEW_CHAT_ID:
+        if cq.get("message", {}).get("chat", {}).get("id") in (REVIEW_CHAT_ID, NOTES_CHANNEL_ID):
             handle_callback(conn, cq)
 
 
@@ -569,7 +649,8 @@ def import_backlog(path):
             continue
         note_id = save_note(conn, text, "import")
         t = triage_note(conn, note_id)
-        print(f"#{note_id:>3}  {t['score']:>2}/10  {t['verdict']:<8} {t['category']:<22} {text[:60]!r}")
+        verdict = "pass" if t["score"] >= MIN_SCORE else "reject"
+        print(f"#{note_id:>3}  {t['score']:>2}/10  {verdict:<7} {t['category']:<22} {text[:60]!r}")
     counts = conn.execute("SELECT verdict, COUNT(*) n FROM notes GROUP BY verdict").fetchall()
     print("Done. " + ", ".join(f"{r['verdict']}: {r['n']}" for r in counts))
 
@@ -587,8 +668,11 @@ if __name__ == "__main__":
                 if len(args) > 1 else best_note(conn))
         if not note:
             raise SystemExit("No note to draft from.")
-        d = write_draft(note)
-        print(f"{d['DRAFT']}\n\n--- NEWS ANGLE\n{d['NEWS ANGLE']}\n\n--- CHECK BEFORE POSTING\n{d['CHECK BEFORE POSTING']}\n\n--- SOURCES\n{d['SOURCES']}")
+        news = find_news(note["text"])
+        d = write_draft(note, news)
+        used = bool(news) and d["USED NEWS"].lower().startswith("y")
+        print(d["DRAFT"] + (f"\n\n{verify_block(news)}" if used else f"\n\n(news not used: {news})"))
+        print(f"\n--- CHECK BEFORE POSTING\n{d['CHECK BEFORE POSTING']}")
     elif not args:
         run()
     else:

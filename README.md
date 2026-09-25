@@ -8,12 +8,13 @@ Meera keeps dropping notes into her Telegram channel. The bot turns the best one
 
 | Stage | What happens |
 |---|---|
-| **Trigger** | A new message in the notes channel, the schedule (Mon/Wed/Fri 08:00 IST by default, matching her three-posts-a-week target), or a `/draft` command |
+| **Trigger** | Meera sends a note to the bot (private chat or her notes channel). A Mon/Wed/Fri 08:00 IST schedule also drafts from any waiting note |
 | **Input** | The note text (or a photo caption) |
-| **Context** | `meera_voice_guide.txt` (built from her 15 published pieces), her 4 published LinkedIn posts, the note's score and angle, and today's date |
-| **Processing** | Notes are saved in SQLite. The scheduler picks the highest-scoring undrafted note (score ≥ `MIN_SCORE`) and never drafts the same note twice |
-| **AI** | (1) **Triage** (Gemini Flash): scores each note 1-10 as develop / hold / discard, with a category and a one-line angle. (2) **Draft** (Gemini Pro + Google Search): finds one current news item or data point, then writes a 450-600 word post. Wherever the post needs a number only Meera has, it writes `[MEERA: …]` instead of making one up |
-| **Output** | The draft, the news source, and a "check before posting" list arrive in her private chat with the bot, with **Approve / Redo / Skip note** buttons |
+| **Context** | `meera_voice_guide.txt` (the Voice Skill, built from her 15 published pieces), her 4 published LinkedIn posts, and one Google News item |
+| **Processing** | 1. **Score** (Gemini Flash): 0-10 with a one-line reason. **Below 6:** the bot explains why and stops, with no draft. 2. **Keywords** (Gemini Flash): a short search phrase. 3. **News:** top Google News result (free RSS, no key), giving headline, source, date and link |
+| **AI** | **Draft** (Gemini Pro): a 450-600 word post in her voice. The news is used only if it fits naturally. Any number only Meera has becomes a `[MEERA: …]` placeholder |
+| **Output** | The draft comes back in the same chat. If it uses the news, it ends with a NEWS SOURCE / FROM / LINK / ⚠ verify block. Meera replies **APPROVE** or **REJECT**, or taps Approve / Redo / Reject |
+| **Memory** | Notes and drafts are saved in SQLite with a status (pending → approved / rejected). Rejected notes and drafts are kept, not deleted |
 
 ## Files
 
@@ -45,14 +46,10 @@ The bot has to keep running for the schedule to fire, so run it on an always-on 
 
 ## Using it
 
-- **In the channel:** post a note as usual. The bot replies under it with its score, for example `Note #7 - 8/10 - Industry Transparency - worth developing`. Set `TRIAGE_REPLIES=false` to turn these replies off.
-- **In the private chat:**
-  - `/draft` drafts now from the best waiting note, and `/draft 7` drafts from note #7.
-  - `/queue` shows the top waiting notes.
-  - `/help` explains how the bot works.
-  - **Approve** marks the draft as ready to copy into LinkedIn.
-  - **Redo** writes a fresh version with a different opening and news angle.
-  - **Skip note** sets the note aside so it won't be picked again.
+- **Send a note:** the bot replies `Score: 9/10 - PASS` (or `NO DRAFT` with the reason). About a minute later, a passing note's draft arrives.
+- **APPROVE / REJECT:** updates the latest pending draft. `APPROVE 3` updates draft #3.
+- **Buttons:** Approve / Redo (a fresh version) / Reject.
+- **Commands:** `/draft 12` drafts note #12, `/queue` shows scored notes waiting for a draft, and `/help` explains how the bot works.
 
 ## Backlog (the 60 old notes)
 
@@ -74,7 +71,7 @@ Each note is triaged as it's imported, and a summary of develop / hold / discard
 
 - **Human in the loop:** nothing is published anywhere. Every draft waits for Meera.
 - **No invented facts:** Skinstinct numbers, timelines and product plans come only from her note. Anything missing becomes a `[MEERA: …]` placeholder.
-- **Verify the news:** every draft lists its news source, and the "check before posting" list always asks her to verify it.
+- **Verify the news:** any draft that uses a news item ends with its headline, source, date and link, plus "⚠ Check this before publishing — you are the author of this claim".
 - **Voice:** the drafting prompt uses her moves, not her sentences. It is told not to copy lines from her past posts.
 - **Secrets:** they live in `.env`, which is git-ignored.
 
